@@ -17,10 +17,21 @@ public class IndexUtils {
 
         // Assumption(s)
         // - both posting lists come from two different inverted indexes, hence docIds are unique
+        // - both lists are sorted in increasing order
+
+        int element1 = list1.get(0);
+        int element2 = list2.get(0);
 
         List<Integer> result = new ArrayList<>();
-        result.addAll(list1);
-        result.addAll(list2);
+
+        if (element1 < element2) {
+            result.addAll(list1);
+            result.addAll(list2);
+        } else {
+            result.addAll(list2);
+            result.addAll(list1);
+        }
+
         return result;
     }
 

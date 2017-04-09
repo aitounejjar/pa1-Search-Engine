@@ -9,6 +9,10 @@ public class PostingList {
 	private String termStr;
 	private List<Integer> postings; // a list of docIDs (i.e. postings)
 
+    //--------------------------------------------------------------------------------------------------------------
+    // public constructor(s)
+    //--------------------------------------------------------------------------------------------------------------
+
 	public PostingList(int termId, List<Integer> list) {
 		this.termId = termId;
 		this.postings = list;
@@ -26,6 +30,10 @@ public class PostingList {
         this.postings = list;
     }
 
+    //--------------------------------------------------------------------------------------------------------------
+    // getter(s) and setter(s)
+    //--------------------------------------------------------------------------------------------------------------
+
 	public int getTermId() {
 		return this.termId;
 	}
@@ -33,6 +41,12 @@ public class PostingList {
 	public List<Integer> getList() {
 		return this.postings;
 	}
+
+	public void setTermStr(String termStr) {
+	    this.termStr = termStr;
+    }
+
+    //--------------------------------------------------------------------------------------------------------------
 
 	public String toString() {
 	    return "(" + termId + ", \"" + termStr + "\") -->" + postings.toString();

@@ -2,6 +2,7 @@ package cs276.assignments;
 
 //import cs276.util.TermIdDocIdPairComparator;
 
+import cs276.util.IndexUtils;
 import cs276.util.Pair;
 
 import java.io.BufferedReader;
@@ -19,6 +20,8 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public class Index {
+
+    private static boolean DEBUG_FLAG = true;
 
     // Term id -> (position in index file, doc frequency) dictionary
     private static Map<Integer, Pair<Long, Integer>> postingDict = new TreeMap<Integer, Pair<Long, Integer>>();
@@ -189,6 +192,7 @@ public class Index {
                     }
                 }
                 reader.close();
+
             } // end - for each file
 
 			/* Sort and output */
@@ -206,6 +210,12 @@ public class Index {
 
             for (int tId : inv_index.keySet()) {
                 writePosting(bfc.getChannel(), inv_index.get(tId));
+            }
+
+            // print the resulting inv. index for the current block
+            print_helper("Printing the index for the block " + block.getName() + ":" );
+            for ( Integer i : inv_index.keySet() ) {
+                print_helper(inv_index.get(i).toString());
             }
 
             bfc.close();
@@ -239,6 +249,10 @@ public class Index {
             RandomAccessFile bf2 = new RandomAccessFile(b2, "r");
             RandomAccessFile mf = new RandomAccessFile(combfile, "rw");
 
+            FileChannel fc1 = bf1.getChannel();
+            FileChannel fc2 = bf2.getChannel();
+            FileChannel mc = mf.getChannel();
+
 			/*
 			 * TODO: Your code here
 			 *       Combine blocks bf1 and bf2 into our combined file, mf
@@ -247,12 +261,6 @@ public class Index {
 			 *
 			 */
 
-
-			FileChannel fc1 = bf1.getChannel();
-			FileChannel fc2 = bf2.getChannel();
-			FileChannel mc = mf.getChannel();
-
-
             PostingList p1 = null;
             PostingList p2 = null;
 
@@ -260,13 +268,58 @@ public class Index {
                 p1 = index.readPosting(fc1);
                 p2 = index.readPosting(fc2);
 
-                int term1 = p1.getTermId();
-                int term2 = p2.getTermId();
+                print_helper("Printing the merged index of blocks '" + b1.getName() + "' and '" +  b2.getName() + "'");
 
-                String s1 = termDict_reversed.get(term1);
-                String s2 = termDict_reversed.get(term2);
+                while (p1!= null || p2!=null) {
 
-                // TBD
+                    if (p1==null && p2==null) {
+                        // we have read all the postings in both inverted indexes
+                        break;
+                    }
+
+                    int term1 = (p1==null) ? -1 : p1.getTermId();
+                    int term2 = (p2==null) ? -1 : p2.getTermId();
+
+                    if (p1 != null) {
+                        p1.setTermStr(termDict_reversed.get(term1));
+                    }
+
+                    if (p2 != null) {
+                        p2.setTermStr(termDict_reversed.get(term2));
+                    }
+
+                    // TBD - do the actual merge ...
+                    if (term1 == term2) {
+                        List<Integer> merged = IndexUtils.mergePostingLists(p1.getList(), p2.getList());
+                        index.writePosting(mf.getChannel(), new PostingList(term1, merged));
+
+                        print_helper( new PostingList(term1, termDict_reversed.get(term1), merged).toString() );
+
+                        // read next posting lists
+                        p1 = index.readPosting(fc1);
+                        p2 = index.readPosting(fc2);
+
+                    } else {
+                        if (term1 == -1) {
+                            index.writePosting(mc, p2);
+                            print_helper(p2!=null ? p2.toString() : "");
+                            p2 = index.readPosting(fc2);
+                        } else if (term2 == -1) {
+                            index.writePosting(mc, p1);
+                            print_helper(p1!=null ? p1.toString() : "");
+                            p1 = index.readPosting(fc1);
+                        } else if (term1 < term2) {
+                            index.writePosting(mc, p1);
+                            print_helper(p1!=null ? p1.toString() : "");
+                            p1 = index.readPosting(fc1);
+                        } else {
+                            index.writePosting(mc, p2);
+                            print_helper(p2!=null ? p2.toString() : "");
+                            p2 = index.readPosting(fc2);
+                        }
+                    }
+
+                }
 
             } catch (Throwable ex) {
                 ex.printStackTrace();
@@ -304,6 +357,10 @@ public class Index {
         postWriter.close();
     }
 
+    public static String getTermStr(int termId) {
+        return termDict_reversed.get(termId);
+    }
+
     //--------------------------------------------------------------------------------------------------------------
     // private method(s)
     //--------------------------------------------------------------------------------------------------------------
@@ -323,6 +380,14 @@ public class Index {
             }
         }
         return(directory.delete());
+    }
+
+    private static void print_helper(String ... strings) {
+        if (DEBUG_FLAG) {
+            for (String s : strings) {
+                System.out.println(s);
+            }
+        }
     }
 
 }

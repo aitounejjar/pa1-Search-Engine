@@ -16,16 +16,17 @@ public class BasicIndex implements BaseIndex {
 		 */
 		ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE * 2);
 		int numOfBytesRead;
-		
+
 		/*
 		 * fc.read reads a sequence of bytes from the fc channel into 
 		 * buffer. Bytes are read starting at this channel's current 
 		 * file position, and then the file position is updated 
 		 * with the number of bytes actually read. 
 		 */
+
 		try {
 			numOfBytesRead = fc.read(buffer);
-			if (numOfBytesRead == -1) return null;
+            if (numOfBytesRead == -1) return null;
 		} catch (IOException e) {
 			throw e;
 		}
@@ -34,10 +35,6 @@ public class BasicIndex implements BaseIndex {
 		 * We are ready to get our termId and frequency.
 		 */
 		buffer.rewind();
-
-		if (!buffer.hasRemaining()) {
-		    return null;
-        }
 
 		/*
 		 * Reads the next four bytes at buffer's current position, 
@@ -55,8 +52,8 @@ public class BasicIndex implements BaseIndex {
 		 * Hint: This differs from reading in termId/freq only 
 		 * in the number of ints to be read in.
 		 */
+
         buffer = ByteBuffer.allocate(INT_SIZE*freq);
-        buffer.clear();
 
         try {
             numOfBytesRead = fc.read(buffer);
@@ -65,10 +62,6 @@ public class BasicIndex implements BaseIndex {
             throw e;
         }
         buffer.rewind();
-        fc.read(buffer);
-        buffer.flip();
-
-
 
         List<Integer> docIds = new ArrayList<>(freq);
         for (int i=0; i<freq; ++i) {
@@ -76,7 +69,8 @@ public class BasicIndex implements BaseIndex {
             docIds.add(docId);
         }
 
-		PostingList postingList = new PostingList(termId, docIds);
+        String termStr = Index.getTermStr(termId);
+		PostingList postingList = new PostingList(termId, termStr, docIds);
 
 		return postingList;
 	}
@@ -92,7 +86,7 @@ public class BasicIndex implements BaseIndex {
 		for (int id : p.getList()) { // put docIds
 			buffer.putInt(id); 
 		}
-		
+
 		/* Flip the buffer so that the position is set to zero.
 		 * This is the counterpart of buffer.rewind()
 		 */
