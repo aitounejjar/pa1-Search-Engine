@@ -59,6 +59,8 @@ public class Index {
 		 *
 		 */
 
+        postingDict.put(posting.getTermId(), new Pair<Long, Integer>(fc.position(), posting.getList().size()));
+
         try {
             index.writePosting(fc, posting);
         } catch (Throwable ex) {
@@ -134,7 +136,7 @@ public class Index {
         for (File block : dirlist) {
 
             // keys are termIds, values are posting lists
-            Map<Integer, PostingList> map = new TreeMap<>();
+            Map<Integer, PostingList> inv_index = new TreeMap<>();
 
             File blockFile = new File(output, block.getName());
             blockQueue.add(blockFile);
@@ -161,29 +163,28 @@ public class Index {
 						 *       documents in which the term occurs
 						 */
 
-
                         int termId;
                         if (!termDict.containsKey(token)) {
                             // add the new term to dictionary
                             termDict.put(token, ++wordIdCounter);
                             termDict_reversed.put(wordIdCounter, token);
                             // assign it an empty postings list
-                            map.put(wordIdCounter, new PostingList(wordIdCounter));
+                            inv_index.put(wordIdCounter, new PostingList(wordIdCounter, token));
                             termId = wordIdCounter;
                         } else {
                             termId = termDict.get(token);
-                            if (map.get(termId) == null) {
+                            if (inv_index.get(termId) == null) {
                                 // this term already exists in the dictionary, but this is the first time it was discovered in this block
-                                map.put(termId, new PostingList(termId));
+                                inv_index.put(termId, new PostingList(termId, token));
                             }
                         }
 
-                        List<Integer> docs = map.get(termId).getList();
+                        List<Integer> docs = inv_index.get(termId).getList();
                         if (!docs.contains(docIdCounter)) {
                             docs.add(docIdCounter);
                         }
 
-                        map.put(termId, new PostingList(termId, docs));
+                        inv_index.put(termId, new PostingList(termId, token, docs));
 
                     }
                 }
@@ -203,8 +204,8 @@ public class Index {
 			 *       Write all posting lists for all terms to file (bfc)
 			 */
 
-            for( int tId : map.keySet() ) {
-                writePosting(bfc.getChannel(), map.get(tId));
+            for (int tId : inv_index.keySet()) {
+                writePosting(bfc.getChannel(), inv_index.get(tId));
             }
 
             bfc.close();
@@ -247,14 +248,29 @@ public class Index {
 			 */
 
 
+			FileChannel fc1 = bf1.getChannel();
+			FileChannel fc2 = bf2.getChannel();
+			FileChannel mc = mf.getChannel();
+
+
+            PostingList p1 = null;
+            PostingList p2 = null;
+
             try {
-                PostingList pl1 = index.readPosting(bf1.getChannel());
-                PostingList pl2 = index.readPosting(bf2.getChannel());
-                int i=0;
+                p1 = index.readPosting(fc1);
+                p2 = index.readPosting(fc2);
+
+                int term1 = p1.getTermId();
+                int term2 = p2.getTermId();
+
+                String s1 = termDict_reversed.get(term1);
+                String s2 = termDict_reversed.get(term2);
+
+                // TBD
+
             } catch (Throwable ex) {
                 ex.printStackTrace();
             }
-
 
             bf1.close();
             bf2.close();

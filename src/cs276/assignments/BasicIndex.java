@@ -1,9 +1,10 @@
 package cs276.assignments;
 
-import java.nio.channels.FileChannel;
-import java.nio.ByteBuffer;
 import java.io.IOException;
-import java.lang.Exception;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BasicIndex implements BaseIndex {
 	private static final int INT_SIZE = 4;
@@ -26,7 +27,6 @@ public class BasicIndex implements BaseIndex {
 			numOfBytesRead = fc.read(buffer);
 			if (numOfBytesRead == -1) return null;
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			throw e;
 		}
 		/*
@@ -34,6 +34,11 @@ public class BasicIndex implements BaseIndex {
 		 * We are ready to get our termId and frequency.
 		 */
 		buffer.rewind();
+
+		if (!buffer.hasRemaining()) {
+		    return null;
+        }
+
 		/*
 		 * Reads the next four bytes at buffer's current position, 
 		 * composing them into an int value according to the 
@@ -49,9 +54,31 @@ public class BasicIndex implements BaseIndex {
 		 * you created.
 		 * Hint: This differs from reading in termId/freq only 
 		 * in the number of ints to be read in.
-		 */		
-		
-		return null;
+		 */
+        buffer = ByteBuffer.allocate(INT_SIZE*freq);
+        buffer.clear();
+
+        try {
+            numOfBytesRead = fc.read(buffer);
+            if (numOfBytesRead == -1) return null;
+        } catch (IOException e) {
+            throw e;
+        }
+        buffer.rewind();
+        fc.read(buffer);
+        buffer.flip();
+
+
+
+        List<Integer> docIds = new ArrayList<>(freq);
+        for (int i=0; i<freq; ++i) {
+            int docId = buffer.getInt();
+            docIds.add(docId);
+        }
+
+		PostingList postingList = new PostingList(termId, docIds);
+
+		return postingList;
 	}
 
 	@Override
