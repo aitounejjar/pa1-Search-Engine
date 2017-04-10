@@ -1,7 +1,5 @@
 package cs276.assignments;
 
-//import cs276.util.TermIdDocIdPairComparator;
-
 import cs276.util.IndexUtils;
 import cs276.util.Pair;
 
@@ -291,7 +289,7 @@ public class Index {
                     // TBD - do the actual merge ...
                     if (term1 == term2) {
                         List<Integer> merged = IndexUtils.mergePostingLists(p1.getList(), p2.getList());
-                        index.writePosting(mf.getChannel(), new PostingList(term1, merged));
+                        writePosting(mf.getChannel(), new PostingList(term1, merged));
 
                         print_helper( new PostingList(term1, termDict_reversed.get(term1), merged).toString() );
 
@@ -301,19 +299,19 @@ public class Index {
 
                     } else {
                         if (term1 == -1) {
-                            index.writePosting(mc, p2);
+                            writePosting(mc, p2);
                             print_helper(p2!=null ? p2.toString() : "");
                             p2 = index.readPosting(fc2);
                         } else if (term2 == -1) {
-                            index.writePosting(mc, p1);
+                            writePosting(mc, p1);
                             print_helper(p1!=null ? p1.toString() : "");
                             p1 = index.readPosting(fc1);
                         } else if (term1 < term2) {
-                            index.writePosting(mc, p1);
+                            writePosting(mc, p1);
                             print_helper(p1!=null ? p1.toString() : "");
                             p1 = index.readPosting(fc1);
                         } else {
-                            index.writePosting(mc, p2);
+                            writePosting(mc, p2);
                             print_helper(p2!=null ? p2.toString() : "");
                             p2 = index.readPosting(fc2);
                         }
