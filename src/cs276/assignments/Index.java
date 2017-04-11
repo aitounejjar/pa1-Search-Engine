@@ -19,7 +19,7 @@ import java.util.TreeMap;
 
 public class Index {
 
-    private static boolean DEBUG_FLAG = true;
+    private static boolean DEBUG_FLAG = false;
 
     // Term id -> (position in index file, doc frequency) dictionary
     private static Map<Integer, Pair<Long, Integer>> postingDict = new TreeMap<Integer, Pair<Long, Integer>>();

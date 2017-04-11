@@ -1,7 +1,5 @@
 package cs276.assignments;
 
-import cs276.util.Pair;
-
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -12,9 +10,11 @@ import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 public class Query {
@@ -27,13 +27,16 @@ public class Query {
 
 	// Doc id -> doc name dictionary
 	private static Map<Integer, String> docDict = new TreeMap<Integer, String>();
+	private static Map<String, Integer> docDict_reversed = new TreeMap<>();
 
 	// Term -> term id dictionary
 	private static Map<String, Integer> termDict = new TreeMap<String, Integer>();
+	private static Map<Integer, String> termDict_reversed = new TreeMap<>();
 
 	// Index
 	private static BaseIndex index = null;
 
+	private static final String NO_RESULTS_FOUND = "no results found";
 	
 	/* 
 	 * Write a posting list with a given termID from the file 
@@ -50,6 +53,7 @@ public class Query {
         PostingList result = null;
         try {
             result = index.readPosting(fc);
+            result.setTermStr(termDict_reversed.get(termId));
         } catch (Throwable throwable) {
             throwable.printStackTrace();
         }
@@ -91,7 +95,10 @@ public class Query {
 		BufferedReader termReader = new BufferedReader(new FileReader(new File(input, "term.dict")));
 		while ((line = termReader.readLine()) != null) {
 			String[] tokens = line.split("\t");
-			termDict.put(tokens[0], Integer.parseInt(tokens[1]));
+			String termStr = tokens[0];
+			int termId = Integer.parseInt(tokens[1]);
+			termDict.put(termStr, termId);
+			termDict_reversed.put(termId, termStr);
 		}
 		termReader.close();
 
@@ -99,7 +106,10 @@ public class Query {
 		BufferedReader docReader = new BufferedReader(new FileReader(new File(input, "doc.dict")));
 		while ((line = docReader.readLine()) != null) {
 			String[] tokens = line.split("\t");
-			docDict.put(Integer.parseInt(tokens[1]), tokens[0]);
+			int docId = Integer.parseInt(tokens[1]);
+			String docName = tokens[0];
+			docDict.put(docId, docName);
+			docDict_reversed.put(docName, docId);
 		}
 		docReader.close();
 
@@ -125,53 +135,124 @@ public class Query {
 			 *       line, sorted in lexicographical order.
 			 */
 
-            LinkedList<List<Integer>> queue = new LinkedList<>();
-
-			String[] query_terms = line.split("\\s+");
-
-			// (termId, termFrequency) pairs
-            List<Pair<Integer, Integer>> pairs = new ArrayList<>(query_terms.length);
-			for (String q : query_terms) {
-                int termId = termDict.get(q);
-                int termFreq = freqDict.get(termId);
-
-                PostingList p = readPosting(indexFile.getChannel(), termId);
-
-                pairs.add( new Pair(termId, termFreq) );
-            }
-
-            Collections.sort(pairs, new Comparator<Pair<Integer, Integer>>() {
-                @Override
-                public int compare(Pair<Integer, Integer> pair1, Pair<Integer, Integer> pair2) {
-                    return pair1.getSecond().compareTo(pair2.getSecond());
-                }
-            });
 
 
-			// TBD ...
+			doQuery(line, indexFile);
+
 
 		}
 		br.close();
 		indexFile.close();
 	}
 
-	private static List<Integer> interset(RandomAccessFile indexFile, int t1, int t2) {
-        PostingList p1 = null;
-        PostingList p2 = null;
-        try {
-            p1 = readPosting(indexFile.getChannel(), t1);
-            p2 = readPosting(indexFile.getChannel(), t2);
-        } catch (IOException e) {
-            e.printStackTrace();
+	private static void doQuery(String line, RandomAccessFile indexFile) {
+        LinkedList<List<Integer>> queue = new LinkedList<>();
+
+        String[] query_terms = line.split("\\s+");
+
+        List<PostingList> postings = new ArrayList<>();
+
+        Set<String> set = new HashSet<>();
+
+        for (String q : query_terms) {
+
+            if (set.contains(q)) {
+                continue;
+            }
+
+            set.add(q);
+
+            Integer termId = termDict.get(q);
+            if (termId == null) {
+                System.out.println(NO_RESULTS_FOUND);
+                return;
+
+            }
+
+            PostingList p = null;
+            try {
+                p = readPosting(indexFile.getChannel(), termId);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            postings.add(p);
         }
 
-        List<Integer> result  = new ArrayList<>();
-        List<Integer> l1 = p1.getList();
-        List<Integer> l2 = p2.getList();
+        Collections.sort(postings, new Comparator<PostingList>() {
+            @Override
+            public int compare(PostingList p1, PostingList p2) {
+                Integer freq1 = p1.getList().size();
+                Integer freq2 = p2.getList().size();
+                return freq1.compareTo(freq2);
+            }
+        });
 
-        // do the intersect here ....
 
-	    return result;
+        for (PostingList p : postings) {
+            queue.add(p.getList());
+        }
+
+        boolean search_aborted = false;
+        while (true) {
+            if (queue.size() <= 1) {
+                break;
+            }
+
+            List<Integer> combined = intersect(queue.removeFirst(), queue.removeFirst());
+            if (combined.isEmpty()) {
+                // posting lists of two terms didn't have any intersection
+                // no need to proceed further
+                search_aborted = true;
+                break;
+            }
+            queue.addFirst(combined);
+
+        }
+
+        if (!search_aborted) {
+            List<Integer> docIds = queue.getFirst();
+            // sorting the document ids in lexicographical order
+            Collections.sort(docIds, new Comparator<Integer>() {
+                @Override
+                public int compare(Integer docId1, Integer docId2) {
+                    String docName1 = docDict.get(docId1);
+                    String docName2 = docDict.get(docId2);
+                    return docName1.compareTo(docName2);
+                }
+            });
+            for (int docId : docIds) {
+                System.out.println(docDict.get(docId));
+            }
+        } else {
+            System.out.println(NO_RESULTS_FOUND);
+        }
+
+    }
+
+	private static List<Integer> intersect(List<Integer> list1, List<Integer> list2) {
+
+	    int size1 = list1.size();
+	    int size2 = list2.size();
+
+        List<Integer> result = new ArrayList<>();
+
+        int i=0, j=0;
+
+        while ( i<size1 && j<size2 ) {
+            int docId1 = list1.get(i);
+            int docId2 = list2.get(j);
+            if (docId1 == docId2) {
+                result.add(docId1);
+                i++;
+                j++;
+            } else if (docId1 < docId2) {
+                i++;
+            } else {
+                j++;
+            }
+        }
+
+        return result;
     }
 
 }
