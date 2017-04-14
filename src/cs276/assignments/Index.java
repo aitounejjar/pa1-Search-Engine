@@ -329,7 +329,7 @@ public class Index {
             b1.delete();
             b2.delete();
 
-            blockQueue.add(combfile);
+            blockQueue.addFirst(combfile);
         }
 
 		/* Dump constructed index back into file system */
