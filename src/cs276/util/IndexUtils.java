@@ -3,7 +3,6 @@ package cs276.util;
 import cs276.assignments.PostingList;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -86,36 +85,4 @@ public class IndexUtils {
 
         return result;
     }
-
-    private void move_this_method_to_a_jUnit() {
-
-        List<PostingList> i1 = new ArrayList<>();
-        List<PostingList> i2 = new ArrayList<>();
-
-        // index 1
-        PostingList p2 = new PostingList(2, Arrays.asList(new Integer[]{1,2,7,8}));
-        PostingList p31 = new PostingList(3, Arrays.asList(new Integer[]{5,7,9}));
-        PostingList p1 = new PostingList(1, Arrays.asList(new Integer[]{1,6,13,15}));
-        PostingList p9 = new PostingList(9, Arrays.asList(new Integer[]{1,6,13,25}));
-
-        // index 2
-        PostingList p32 = new PostingList(3, Arrays.asList(new Integer[]{17,19,21,33}));
-        PostingList p5 = new PostingList(5, Arrays.asList(new Integer[]{24,28,29,100}));
-        PostingList p7 = new PostingList(7, Arrays.asList(new Integer[]{16,17,18,19}));
-
-
-        i1.add(p2);
-        i1.add(p31);
-        i1.add(p1);
-        i1.add(p9);
-
-        i2.add(p32);
-        i2.add(p5);
-        i2.add(p7);
-
-        List<PostingList> result = IndexUtils.mergeInvertedIndexes(i1, i2);
-        // TBD: add some verification on the result
-        // TBD: move method to a jUnit
-    }
-
 }

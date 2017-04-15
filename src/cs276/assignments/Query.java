@@ -223,6 +223,7 @@ public class Query {
             for (int docId : docIds) {
                 System.out.println(docDict.get(docId));
             }
+            System.out.println("----> total: " + docIds.size());
         } else {
             System.out.println(NO_RESULTS_FOUND);
         }

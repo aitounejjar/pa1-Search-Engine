@@ -5,133 +5,286 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.List;
 
 public class VBIndex implements BaseIndex {
 
+    // number of bytes in an int
     private static final int INT_SIZE = 4;
-    private static final int ONE_TWENTY_EIGHT = 128;
 
-	@Override
-	public PostingList readPosting(FileChannel fc) {
-		/*
-		 * TODO: Your code here
-		 */
-
-		// read a sequence of bytes that have continuation bits of 0, except for the last byte which has CB set to 1
-        // concatenate the 7 low bits of each byte to construct the gap, which then needs to be decoded to get the document id
-
-
-
-
-		return null;
-	}
+    // max number of bytes in a vb code
+    private static final int MAX_VB_BYTES = Integer.SIZE / 7 + 1;
 
 	@Override
 	public void writePosting(FileChannel fc, PostingList p) {
 		/*
 		 * TODO: Your code here
-		 * an entry in the VB compressed index looks like: [termId] [gap1] [gap2] .... [gapN]
+		 * entries in the vb compressed index are in the form: [termId] [vbCodeLength] [gap1] [gap2] .... [gapN]
 		 */
 
-		/*
-		 * The allocated space is for termID + freq + docIds in p
-		 */
+		/* encode the posting list */
+        int[] arr = p.getListAsArray();
+        gapEncode(arr);
+        ByteArrayOutputStream stream = vb_encode(arr);
+        int vbCodeLength = stream.size();
+
+        /* writing the termId */
         ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE);
-        buffer.putInt(p.getTermId()); // put termId
-
-		/* Flip the buffer so that the position is set to zero.
-		 * This is the counterpart of buffer.rewind()
-		 */
+        buffer.putInt(p.getTermId());
         buffer.flip();
+        writeHelper(fc, buffer);
 
+        /* writing the vb code length */
+        buffer = ByteBuffer.allocate(INT_SIZE);
+        buffer.putInt(vbCodeLength);
+        buffer.flip();
+        writeHelper(fc, buffer);
+
+        /* writing the encoded bytes */
+        buffer = ByteBuffer.allocate(stream.size());
+        buffer.put(stream.toByteArray());
+        buffer.flip();
+        writeHelper(fc, buffer);
+
+    }
+
+    @Override
+    public PostingList readPosting(FileChannel fc) {
 		/*
-		 * fc.write writes a sequence of bytes into fc from buffer.
-		 * File position is updated with the number of bytes actually
-		 * written
+		 * TODO: Your code here
 		 */
+
+        /* read the term id and vb code length*/
+        ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE*2);
+        //readHelper(fc, buffer);
+        int numOfBytesRead;
+        try {
+            numOfBytesRead = fc.read(buffer);
+            if (numOfBytesRead == -1) {
+                return null;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        buffer.rewind();
+        int termId = buffer.getInt();
+        int vbCodeLength = buffer.getInt();
+
+        // read a sequence of bytes that have continuation bits of 0, except for the last byte which has CB set to 1
+        // concatenate the 7 low bits of each byte to construct the gap, which then needs to be decoded to get the document id
+
+        List<Integer> gaps = new ArrayList<>();
+        int bytesRead = 0;
+        while (bytesRead != vbCodeLength) { // loops over the gaps
+            byte[] bytes = new byte[MAX_VB_BYTES];
+            int index = 0;
+            while (true) { // loops over bytes within the same gap
+                buffer = ByteBuffer.allocate(1);
+                //readHelper(fc, buffer);
+                try {
+                    numOfBytesRead = fc.read(buffer);
+                    if (numOfBytesRead == -1) {
+                        return null;
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                buffer.rewind();
+
+                byte b = buffer.get();
+                bytes[index] = b;
+                index++;
+
+                if (isLastByte(b)) {
+                    // we've read the last byte needed to decode this gap
+                    int gap = VBDecodeInteger(bytes, 0, new int[2]);
+                    gaps.add(gap);
+                    break;
+                }
+            }
+
+            bytesRead++;
+        }
+
+        int[] docIds = gapDecode(getIntArray(gaps));
+
+        return new PostingList(termId, docIds);
+    }
+
+    private ByteArrayOutputStream vb_encode(int[] gaps) {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+	    for (int i=0; i<gaps.length; ++i) {
+
+	        byte[] b = new byte[MAX_VB_BYTES];
+	        int numBytes = VBEncodeInteger(gaps[i], b);
+            stream.write(b, 0, numBytes);
+
+        }
+        return stream;
+    }
+
+    /**
+     * Gap encodes a postings list.  The DocIds in the postings list are provided
+     * in the array inputDocIdsOutputGaps.  The output gaps are placed right back
+     * into this array, replacing each docId with the corresponding gap.
+     *
+     * Example:
+     * If inputDocIdsOutputGaps is initially {5, 1000, 1005, 1100}
+     * then at the end inputDocIdsOutputGaps is set to {5, 995, 5, 95}
+     *
+     * @param inputDocIdsOutputGaps The array of input docIds.
+     *                              The output gaps are placed back into this array!
+     */
+    private void gapEncode(int[] inputDocIdsOutputGaps) {
+
+        // TODO: Fill in your code here
+
+        if (inputDocIdsOutputGaps.length == 0) {
+            return;
+        }
+
+        int tracker = inputDocIdsOutputGaps[0];
+        for (int i=1; i<inputDocIdsOutputGaps.length; ++i) {
+            inputDocIdsOutputGaps[i] = inputDocIdsOutputGaps[i] - tracker;
+            tracker += inputDocIdsOutputGaps[i];
+        }
+
+    }
+
+    /**
+     * Decodes a gap encoded postings list into the corresponding docIds.  The input
+     * gaps are provided in inputGapsOutputDocIds.  The output docIds are placed
+     * right back into this array, replacing each gap with the corresponding docId.
+     *
+     * Example:
+     * If inputGapsOutputDocIds is initially {5, 905, 5, 95}
+     * then at the end inputGapsOutputDocIds is set to {5, 1000, 1005, 1100}
+     *
+     * @param inputGapsOutputDocIds The array of input gaps.
+     *                              The output docIds are placed back into this array.
+     */
+    private int[] gapDecode(int[] inputGapsOutputDocIds) {
+        // TODO: Fill in your code here
+        for (int i=1; i<inputGapsOutputDocIds.length; ++i) {
+            inputGapsOutputDocIds[i] = inputGapsOutputDocIds[i] + inputGapsOutputDocIds[i-1];
+        }
+        return inputGapsOutputDocIds;
+    }
+
+    /**
+     * Encodes gap using a VB code.  The encoded bytes are placed in outputVBCode.
+     * Returns the number bytes placed in outputVBCode.
+     *
+     * @param gap          gap to be encoded.  Assumed to be greater than or equal to 0.
+     * @param outputVBCode VB encoded bytes are placed here.  This byte array is assumed to be large
+     *                     enough to hold the VB code for gap (e.g., Integer.SIZE/7 + 1).
+     * @return Number of bytes placed in outputVBCode.
+     */
+    private int VBEncodeInteger(int gap, byte[] outputVBCode) {
+        int numBytes = 0;
+
+        // TODO: Fill in your code here
+
+        boolean isContinuationBitSet = false; // tells us whether or not the continuation bit was already set
+
+        while (true) {
+            if (gap < 128) {
+                byte b = (byte) (gap); // set continuation bit
+                if (!isContinuationBitSet) {
+                    b = (byte) (gap | 0b10000000);
+                }
+                prependToArray(outputVBCode, b);//outputVBCode[numBytes] = b;
+                numBytes++;
+                break;
+            }
+
+            byte low7bits = (byte) (gap & 0b01111111); // get low 7 bits
+            if (!isContinuationBitSet) {
+                low7bits = (byte) (low7bits | 0b10000000); // set continuation bit
+            }
+
+            prependToArray(outputVBCode, low7bits); //outputVBCode[numBytes] = low7bits;
+            isContinuationBitSet = true;
+            numBytes++;
+            gap = gap >> 7;
+        }
+
+        return numBytes;
+
+    }
+
+    /**
+     * Decodes the first integer encoded in inputVBCode starting at index startIndex.  The decoded
+     * number is placed in the element zero of the numberEndIndex array and the index position
+     * immediately after the encoded value is placed in element one of the numberEndIndex array.
+     *
+     * @param inputVBCode    Byte array containing the VB encoded number starting at index startIndex.
+     * @param startIndex     Index in inputVBCode where the VB encoded number starts
+     * @param numberEndIndex Outputs are placed in this array.  The first element is set to the
+     *                       decoded number and the second element is set to the index of inputVBCode
+     *                       immediately after the end of the VB encoded number.
+     * @throws IllegalArgumentException If not a valid variable byte code
+     */
+    private int VBDecodeInteger(byte[] inputVBCode, int startIndex, int[] numberEndIndex) {
+        // TODO: Fill in your code here
+
+        int result = 0;
+        int i = inputVBCode.length - 1;
+        int counter = 0;
+        for (; i>=0; i--) {
+            if (inputVBCode[i] == 0) {
+                continue;
+            }
+
+            // TODO: do some validations ... msb must be one for the first byte read, and 0 for the remaining bytes ...
+            byte temp = inputVBCode[i];
+            temp = (byte) (temp & 0b01111111); // unset the high bit
+            result = (temp << (7 * counter)) | result;
+            counter++;
+
+        }
+
+        numberEndIndex[0] = result;
+        numberEndIndex[1] = counter;
+
+        return result;
+
+    }
+
+    private void prependToArray(byte[] a, byte b) {
+        // TODO: handle edge cases
+        for (int i=a.length-2; i>=0; --i) {
+            a[i+1] = a[i];
+        }
+        a[0] = b;
+    }
+
+    private boolean isLastByte(byte b) {
+        return ((b>>7)&1) == 1;
+    }
+
+    private void writeHelper(FileChannel fc, ByteBuffer buffer) {
         try {
             fc.write(buffer);
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
 
-        List<Integer> gaps = create_gaps(p.getList());
-        ByteArrayOutputStream stream = vb_encode(gaps);
+    private void xxxreadHelper(FileChannel fc, ByteBuffer buffer) {
+        int numOfBytesRead;
         try {
-            fc.write(ByteBuffer.wrap(stream.toByteArray()));
+            numOfBytesRead = fc.read(buffer);
+            if (numOfBytesRead == -1) {
+                throw new RuntimeException("Could not read from the buffer.");
+            }
         } catch (IOException e) {
             e.printStackTrace();
         }
-
     }
 
-	private ByteArrayOutputStream vb_encode(List<Integer> pGaps) {
-        ByteArrayOutputStream bytestream = new ByteArrayOutputStream();
-        for (int gap : pGaps) {
-            byte[] bytes = vb_encode(gap);
-            try {
-                bytestream.write(bytes);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-	    return bytestream;
-    }
-
-    private byte[] vb_encode(int pGap) {
-
-
-	    int size = 0;
-	    byte[] bytes = new byte[size];
-	    while (true) {
-	        // do prepend bytes
-            int remainder = pGap % ONE_TWENTY_EIGHT;
-            bytes = prepend(bytes, remainder);
-            if (pGap < ONE_TWENTY_EIGHT) {
-                break;
-            }
-            pGap = pGap/ONE_TWENTY_EIGHT;
-            bytes[bytes.length] += ONE_TWENTY_EIGHT;
-        }
-
-
-	    return bytes;
-    }
-
-    private byte[] prepend(byte[] pBytes, int pDecimal) {
-
-	    byte[] a = new byte[pBytes.length+1];
-        int i=0;
-	    for (; i<pBytes.length; i++) {
-	        a[i] = pBytes[i];
-        }
-        a[i] = (byte) pDecimal;
-
-
-
-
-	    // TODO: append pDecimal to pBytes and return the result
-        BitSet bitSet = new BitSet();
-        // TODO: do some bit ops
-	    return a;
-    }
-
-
-    private List<Integer> vb_decode(ByteArrayOutputStream pStream) {
-        List<Integer> docIds = new ArrayList<>();
-
-        return docIds;
-    }
-
-    private List<Integer> create_gaps(List<Integer> pDocIds) {
-        List<Integer> gaps = new ArrayList<>(pDocIds.size());
-        gaps.add(pDocIds.get(0));
-        for (int i=1; i<pDocIds.size(); i++) {
-            gaps.add( pDocIds.get(i) - pDocIds.get(i-1) );
-        }
-        return gaps;
+    private int[] getIntArray(List<Integer> list) {
+        return list.stream().mapToInt(i->i).toArray();
     }
 
 }

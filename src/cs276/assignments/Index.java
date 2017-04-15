@@ -22,18 +22,18 @@ public class Index {
     private static boolean DEBUG_FLAG = false;
 
     // Term id -> (position in index file, doc frequency) dictionary
-    private static Map<Integer, Pair<Long, Integer>> postingDict = new TreeMap<Integer, Pair<Long, Integer>>();
+    private static Map<Integer, Pair<Long, Integer>> postingDict = new TreeMap<>();
 
     // Doc name -> doc id dictionary
     private static Map<String, Integer> docDict = new TreeMap<String, Integer>();
     private static Map<Integer, String> docDict_reversed = new TreeMap<>();
 
     // Term -> term id dictionary. This makes index construction more efficient. How ?
-    private static Map<String, Integer> termDict = new TreeMap<String, Integer>();
+    private static Map<String, Integer> termDict = new TreeMap<>();
     private static Map<Integer, String> termDict_reversed = new TreeMap<>();
 
     // Block queue
-    private static LinkedList<File> blockQueue = new LinkedList<File>();
+    private static LinkedList<File> blockQueue = new LinkedList<>();
 
     // Total file counter
     private static int totalFileCount = 0;
@@ -60,7 +60,7 @@ public class Index {
 		 *
 		 */
 
-        postingDict.put(posting.getTermId(), new Pair<Long, Integer>(fc.position(), posting.getList().size()));
+        postingDict.put(posting.getTermId(), new Pair<>(fc.position(), posting.getList().size()));
 
         try {
             index.writePosting(fc, posting);
