@@ -28,23 +28,50 @@ public class VBIndex implements BaseIndex {
         ByteArrayOutputStream stream = vb_encode(arr);
         int vbCodeLength = stream.size();
 
-        /* writing the termId */
+        if (vbCodeLength < arr.length) {
+            throw new RuntimeException("Number of bytes in the vb code must be at least equal to number of encoded gaps.");
+        }
+
+        if (arr.length > 10000) {
+            int thisIsCrazy = 0;
+        }
+
+        // allocate
+        ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE*2 + vbCodeLength);
+
+        // put
+        buffer.putInt(p.getTermId());
+        buffer.putInt(vbCodeLength);
+        buffer.put(stream.toByteArray());
+
+        // flip
+        buffer.flip();
+
+        // write
+        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
+
+        /*
+        / * writing the termId * /
         ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE);
         buffer.putInt(p.getTermId());
         buffer.flip();
-        writeHelper(fc, buffer);
+        //writeHelper(fc, buffer);
+        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
 
-        /* writing the vb code length */
+        / * writing the vb code length * /
         buffer = ByteBuffer.allocate(INT_SIZE);
         buffer.putInt(vbCodeLength);
         buffer.flip();
-        writeHelper(fc, buffer);
+        //writeHelper(fc, buffer);
+        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
 
-        /* writing the encoded bytes */
+        / * writing the encoded bytes * /
         buffer = ByteBuffer.allocate(stream.size());
         buffer.put(stream.toByteArray());
         buffer.flip();
-        writeHelper(fc, buffer);
+        //writeHelper(fc, buffer);
+        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
+        */
 
     }
 
@@ -54,7 +81,7 @@ public class VBIndex implements BaseIndex {
 		 * TODO: Your code here
 		 */
 
-        /* read the term id and vb code length*/
+        /* read the term id and vb code length */
         ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE*2);
         //readHelper(fc, buffer);
         int numOfBytesRead;
@@ -70,45 +97,41 @@ public class VBIndex implements BaseIndex {
         int termId = buffer.getInt();
         int vbCodeLength = buffer.getInt();
 
-        // read a sequence of bytes that have continuation bits of 0, except for the last byte which has CB set to 1
-        // concatenate the 7 low bits of each byte to construct the gap, which then needs to be decoded to get the document id
+
+        buffer = ByteBuffer.allocate(vbCodeLength);
+        try {
+            numOfBytesRead = fc.read(buffer);
+            if (numOfBytesRead == -1) {
+                return null;
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        buffer.rewind();
+
+        byte[] allBytes = new byte[vbCodeLength];
+        buffer.get(allBytes, 0, vbCodeLength);
 
         List<Integer> gaps = new ArrayList<>();
-        int bytesRead = 0;
-        while (bytesRead != vbCodeLength) { // loops over the gaps
-            byte[] bytes = new byte[MAX_VB_BYTES];
-            int index = 0;
-            while (true) { // loops over bytes within the same gap
-                buffer = ByteBuffer.allocate(1);
-                //readHelper(fc, buffer);
-                try {
-                    numOfBytesRead = fc.read(buffer);
-                    if (numOfBytesRead == -1) {
-                        return null;
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                buffer.rewind();
 
-                byte b = buffer.get();
-                bytes[index] = b;
-                index++;
-
-                if (isLastByte(b)) {
-                    // we've read the last byte needed to decode this gap
-                    int gap = VBDecodeInteger(bytes, 0, new int[2]);
-                    gaps.add(gap);
-                    break;
-                }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        for (int i=0; i<allBytes.length; ++i) {
+            byte b = allBytes[i];
+            if (isMsbSet(b)) {
+                baos.write(b);
+                int gap = VBDecodeInteger(baos.toByteArray(), 0, new int[2]);
+                gaps.add(gap);
+                baos = new ByteArrayOutputStream();
+            } else {
+                baos.write(b);
             }
-
-            bytesRead++;
         }
 
-        int[] docIds = gapDecode(getIntArray(gaps));
+        int[] arr = getIntArray(gaps);
+        int[] docIds = gapDecode(arr);
 
         return new PostingList(termId, docIds);
+
     }
 
     private ByteArrayOutputStream vb_encode(int[] gaps) {
@@ -117,6 +140,7 @@ public class VBIndex implements BaseIndex {
 
 	        byte[] b = new byte[MAX_VB_BYTES];
 	        int numBytes = VBEncodeInteger(gaps[i], b);
+
             stream.write(b, 0, numBytes);
 
         }
@@ -167,6 +191,9 @@ public class VBIndex implements BaseIndex {
         // TODO: Fill in your code here
         for (int i=1; i<inputGapsOutputDocIds.length; ++i) {
             inputGapsOutputDocIds[i] = inputGapsOutputDocIds[i] + inputGapsOutputDocIds[i-1];
+            if (inputGapsOutputDocIds[i] > 10000) {
+                int thisIsCrazy = 0;
+            }
         }
         return inputGapsOutputDocIds;
     }
@@ -185,29 +212,28 @@ public class VBIndex implements BaseIndex {
 
         // TODO: Fill in your code here
 
-        boolean isContinuationBitSet = false; // tells us whether or not the continuation bit was already set
-
         while (true) {
             if (gap < 128) {
                 byte b = (byte) (gap); // set continuation bit
-                if (!isContinuationBitSet) {
+                if (numBytes==0) {
                     b = (byte) (gap | 0b10000000);
                 }
-                prependToArray(outputVBCode, b);//outputVBCode[numBytes] = b;
+                prependToArray(outputVBCode, b);
                 numBytes++;
                 break;
             }
 
             byte low7bits = (byte) (gap & 0b01111111); // get low 7 bits
-            if (!isContinuationBitSet) {
+            if (numBytes==0) {
                 low7bits = (byte) (low7bits | 0b10000000); // set continuation bit
             }
 
-            prependToArray(outputVBCode, low7bits); //outputVBCode[numBytes] = low7bits;
-            isContinuationBitSet = true;
+            prependToArray(outputVBCode, low7bits);
             numBytes++;
             gap = gap >> 7;
         }
+
+        validateVBCode(outputVBCode);
 
         return numBytes;
 
@@ -228,16 +254,19 @@ public class VBIndex implements BaseIndex {
     private int VBDecodeInteger(byte[] inputVBCode, int startIndex, int[] numberEndIndex) {
         // TODO: Fill in your code here
 
+        //validateVBCode(inputVBCode);
+
         int result = 0;
         int i = inputVBCode.length - 1;
         int counter = 0;
         for (; i>=0; i--) {
-            if (inputVBCode[i] == 0) {
-                continue;
-            }
-
             // TODO: do some validations ... msb must be one for the first byte read, and 0 for the remaining bytes ...
             byte temp = inputVBCode[i];
+            if ( ( counter==0 && (((temp>>7)&1) != 1)) || ( counter !=0 && (((temp>>7)&1) == 1)) ) {
+                // a vb code is invalid if the continuation bit isn't set for the first byte
+                // or if it was set for one of subsequent bytes
+                throw new IllegalArgumentException("Oups ... an invalid was detected !");
+            }
             temp = (byte) (temp & 0b01111111); // unset the high bit
             result = (temp << (7 * counter)) | result;
             counter++;
@@ -257,13 +286,15 @@ public class VBIndex implements BaseIndex {
             a[i+1] = a[i];
         }
         a[0] = b;
+        validateVBCode(a);
     }
 
-    private boolean isLastByte(byte b) {
+    // returns true if the msb was set on the passed byte, otherwise returns false
+    private boolean isMsbSet(byte b) {
         return ((b>>7)&1) == 1;
     }
 
-    private void writeHelper(FileChannel fc, ByteBuffer buffer) {
+    private void xxxwriteHelper(FileChannel fc, ByteBuffer buffer) {
         try {
             fc.write(buffer);
         } catch (IOException e) {
@@ -285,6 +316,49 @@ public class VBIndex implements BaseIndex {
 
     private int[] getIntArray(List<Integer> list) {
         return list.stream().mapToInt(i->i).toArray();
+    }
+
+    private void validateVBCode(byte[] bytes) {
+
+        if (bytes.length > 5) {
+            throw new IllegalArgumentException("VB code length for a single integer should never exceed 5. Actual size is: " + bytes.length);
+        }
+
+        // E.g.: [2] [0] [3] [0] [0] <- i
+
+        boolean nonZeroEncountered = false;
+        int indexOfRightMostNonZero = bytes.length-1;
+
+        for (int i=bytes.length-1; i>=0; i--) {
+            if (!nonZeroEncountered && bytes[i] == 0) {
+                continue;
+            }
+
+            if (!nonZeroEncountered) {
+                indexOfRightMostNonZero = i;
+                nonZeroEncountered = true;
+            }
+
+            if (indexOfRightMostNonZero == i) {
+                if (! isMsbSet(bytes[i])) {
+                    throw new IllegalArgumentException("Wrong vb code: expecting 1 in msb, but found 0.");
+                }
+            } else {
+                if (isMsbSet(bytes[i])) {
+                    throw new IllegalArgumentException("Wrong vb code: expecting 0 in msb, but found 1.");
+                }
+            }
+        }
+
+        int counter = 0;
+        for (int i=0; i<bytes.length; i++) {
+            if (isMsbSet(bytes[i])) {
+                counter++;
+            }
+        }
+        if (counter != 1) {
+            throw new IllegalArgumentException("A vb code must have exactly one byte with the msb set. Found: " + counter);
+        }
     }
 
 }
