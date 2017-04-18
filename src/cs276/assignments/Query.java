@@ -135,8 +135,6 @@ public class Query {
 			 *       line, sorted in lexicographical order.
 			 */
 
-
-
 			doQuery(line, indexFile);
 
 
@@ -223,7 +221,7 @@ public class Query {
             for (int docId : docIds) {
                 System.out.println(docDict.get(docId));
             }
-            System.out.println("----> total: " + docIds.size());
+            //System.out.println("----> total: " + docIds.size());
         } else {
             System.out.println(NO_RESULTS_FOUND);
         }

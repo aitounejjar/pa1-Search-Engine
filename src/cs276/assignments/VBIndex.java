@@ -1,16 +1,12 @@
 package cs276.assignments;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 
-public class VBIndex implements BaseIndex {
-
-    // number of bytes in an int
-    private static final int INT_SIZE = 4;
+public class VBIndex extends AbstractIndex {
 
     // max number of bytes in a vb code
     private static final int MAX_VB_BYTES = Integer.SIZE / 7 + 1;
@@ -25,15 +21,11 @@ public class VBIndex implements BaseIndex {
 		/* encode the posting list */
         int[] arr = p.getListAsArray();
         gapEncode(arr);
-        ByteArrayOutputStream stream = vb_encode(arr);
+        ByteArrayOutputStream stream = VBEncode(arr);
         int vbCodeLength = stream.size();
 
         if (vbCodeLength < arr.length) {
             throw new RuntimeException("Number of bytes in the vb code must be at least equal to number of encoded gaps.");
-        }
-
-        if (arr.length > 10000) {
-            int thisIsCrazy = 0;
         }
 
         // allocate
@@ -48,30 +40,7 @@ public class VBIndex implements BaseIndex {
         buffer.flip();
 
         // write
-        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
-
-        /*
-        / * writing the termId * /
-        ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE);
-        buffer.putInt(p.getTermId());
-        buffer.flip();
-        //writeHelper(fc, buffer);
-        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
-
-        / * writing the vb code length * /
-        buffer = ByteBuffer.allocate(INT_SIZE);
-        buffer.putInt(vbCodeLength);
-        buffer.flip();
-        //writeHelper(fc, buffer);
-        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
-
-        / * writing the encoded bytes * /
-        buffer = ByteBuffer.allocate(stream.size());
-        buffer.put(stream.toByteArray());
-        buffer.flip();
-        //writeHelper(fc, buffer);
-        try { fc.write(buffer); } catch (IOException e) { e.printStackTrace(); }
-        */
+        writeHelper(fc, buffer);
 
     }
 
@@ -83,30 +52,17 @@ public class VBIndex implements BaseIndex {
 
         /* read the term id and vb code length */
         ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE*2);
-        //readHelper(fc, buffer);
-        int numOfBytesRead;
-        try {
-            numOfBytesRead = fc.read(buffer);
-            if (numOfBytesRead == -1) {
-                return null;
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        int numOfBytesRead = readHelper(fc, buffer);
+        if (numOfBytesRead == -1) { return null; }
         buffer.rewind();
+
         int termId = buffer.getInt();
         int vbCodeLength = buffer.getInt();
 
 
         buffer = ByteBuffer.allocate(vbCodeLength);
-        try {
-            numOfBytesRead = fc.read(buffer);
-            if (numOfBytesRead == -1) {
-                return null;
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        numOfBytesRead = readHelper(fc, buffer);
+        if (numOfBytesRead == -1) { return null; }
         buffer.rewind();
 
         byte[] allBytes = new byte[vbCodeLength];
@@ -134,7 +90,7 @@ public class VBIndex implements BaseIndex {
 
     }
 
-    private ByteArrayOutputStream vb_encode(int[] gaps) {
+    private ByteArrayOutputStream VBEncode(int[] gaps) {
         ByteArrayOutputStream stream = new ByteArrayOutputStream();
 	    for (int i=0; i<gaps.length; ++i) {
 
@@ -145,57 +101,6 @@ public class VBIndex implements BaseIndex {
 
         }
         return stream;
-    }
-
-    /**
-     * Gap encodes a postings list.  The DocIds in the postings list are provided
-     * in the array inputDocIdsOutputGaps.  The output gaps are placed right back
-     * into this array, replacing each docId with the corresponding gap.
-     *
-     * Example:
-     * If inputDocIdsOutputGaps is initially {5, 1000, 1005, 1100}
-     * then at the end inputDocIdsOutputGaps is set to {5, 995, 5, 95}
-     *
-     * @param inputDocIdsOutputGaps The array of input docIds.
-     *                              The output gaps are placed back into this array!
-     */
-    private void gapEncode(int[] inputDocIdsOutputGaps) {
-
-        // TODO: Fill in your code here
-
-        if (inputDocIdsOutputGaps.length == 0) {
-            return;
-        }
-
-        int tracker = inputDocIdsOutputGaps[0];
-        for (int i=1; i<inputDocIdsOutputGaps.length; ++i) {
-            inputDocIdsOutputGaps[i] = inputDocIdsOutputGaps[i] - tracker;
-            tracker += inputDocIdsOutputGaps[i];
-        }
-
-    }
-
-    /**
-     * Decodes a gap encoded postings list into the corresponding docIds.  The input
-     * gaps are provided in inputGapsOutputDocIds.  The output docIds are placed
-     * right back into this array, replacing each gap with the corresponding docId.
-     *
-     * Example:
-     * If inputGapsOutputDocIds is initially {5, 905, 5, 95}
-     * then at the end inputGapsOutputDocIds is set to {5, 1000, 1005, 1100}
-     *
-     * @param inputGapsOutputDocIds The array of input gaps.
-     *                              The output docIds are placed back into this array.
-     */
-    private int[] gapDecode(int[] inputGapsOutputDocIds) {
-        // TODO: Fill in your code here
-        for (int i=1; i<inputGapsOutputDocIds.length; ++i) {
-            inputGapsOutputDocIds[i] = inputGapsOutputDocIds[i] + inputGapsOutputDocIds[i-1];
-            if (inputGapsOutputDocIds[i] > 10000) {
-                int thisIsCrazy = 0;
-            }
-        }
-        return inputGapsOutputDocIds;
     }
 
     /**
@@ -233,8 +138,6 @@ public class VBIndex implements BaseIndex {
             gap = gap >> 7;
         }
 
-        validateVBCode(outputVBCode);
-
         return numBytes;
 
     }
@@ -253,8 +156,6 @@ public class VBIndex implements BaseIndex {
      */
     private int VBDecodeInteger(byte[] inputVBCode, int startIndex, int[] numberEndIndex) {
         // TODO: Fill in your code here
-
-        //validateVBCode(inputVBCode);
 
         int result = 0;
         int i = inputVBCode.length - 1;
@@ -286,36 +187,11 @@ public class VBIndex implements BaseIndex {
             a[i+1] = a[i];
         }
         a[0] = b;
-        validateVBCode(a);
     }
 
     // returns true if the msb was set on the passed byte, otherwise returns false
     private boolean isMsbSet(byte b) {
         return ((b>>7)&1) == 1;
-    }
-
-    private void xxxwriteHelper(FileChannel fc, ByteBuffer buffer) {
-        try {
-            fc.write(buffer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void xxxreadHelper(FileChannel fc, ByteBuffer buffer) {
-        int numOfBytesRead;
-        try {
-            numOfBytesRead = fc.read(buffer);
-            if (numOfBytesRead == -1) {
-                throw new RuntimeException("Could not read from the buffer.");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private int[] getIntArray(List<Integer> list) {
-        return list.stream().mapToInt(i->i).toArray();
     }
 
     private void validateVBCode(byte[] bytes) {

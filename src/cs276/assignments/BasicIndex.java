@@ -1,49 +1,73 @@
 package cs276.assignments;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
 
-public class BasicIndex implements BaseIndex {
-	private static final int INT_SIZE = 4;
+public class BasicIndex extends AbstractIndex {
 
-	@Override
-	public PostingList readPosting(FileChannel fc) throws Throwable {
-		/*
-		 * Allocate two ints, preparing for reading in termId and freq
+    @Override
+    public void writePosting(FileChannel fc, PostingList p) throws Throwable {
+
+        /*
+		 * The allocated space is for termID + freq + docIds in p
 		 */
-		ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE * 2);
-		int numOfBytesRead;
+        ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE * (p.getList().size() + 2));
+        buffer.putInt(p.getTermId()); // put termId
+        buffer.putInt(p.getList().size()); // put freq
+        for (int id : p.getList()) { // put docIds
+            buffer.putInt(id);
+        }
 
-		/*
-		 * fc.read reads a sequence of bytes from the fc channel into 
-		 * buffer. Bytes are read starting at this channel's current 
-		 * file position, and then the file position is updated 
-		 * with the number of bytes actually read. 
+		/* Flip the buffer so that the position is set to zero.
+		 * This is the counterpart of buffer.rewind()
 		 */
+        buffer.flip();
 
-		try {
-			numOfBytesRead = fc.read(buffer);
-            if (numOfBytesRead == -1) return null;
-		} catch (IOException e) {
-			throw e;
-		}
-		/*
-		 * Rewinds the buffer. Position is set to zero. 
+        /*
+		 * fc.write writes a sequence of bytes into fc from buffer.
+		 * File position is updated with the number of bytes actually
+		 * written
+		 */
+        writeHelper(fc, buffer);
+    }
+
+    @Override
+    public PostingList readPosting(FileChannel fc) throws Throwable {
+
+        /*
+		 * Allocate two integers, preparing for reading in termId and freq
+		 */
+        ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE * 2);
+
+        /*
+		 * fc.read reads a sequence of bytes from the fc channel into
+		 * buffer. Bytes are read starting at this channel's current
+		 * file position, and then the file position is updated
+		 * with the number of bytes actually read.
+		 */
+        int numOfBytesRead = readHelper(fc, buffer);
+
+        /**
+         * if no bytes were read ...
+         */
+        if (numOfBytesRead == -1) { return null; }
+
+        /*
+		 * Rewinds the buffer. Position is set to zero.
 		 * We are ready to get our termId and frequency.
 		 */
-		buffer.rewind();
+        buffer.rewind();
 
 		/*
 		 * Reads the next four bytes at buffer's current position, 
 		 * composing them into an int value according to the 
 		 * current byte order, and then increments the position 
 		 * by four.
-		 */	
-		int termId = buffer.getInt();
-		int freq = buffer.getInt();
+		 */
+        int termId = buffer.getInt();
+        int freq = buffer.getInt();
 		
 		/* TODO:
 		 * You should create a PostingList and use buffer 
@@ -53,53 +77,20 @@ public class BasicIndex implements BaseIndex {
 		 * in the number of ints to be read in.
 		 */
 
-        buffer = ByteBuffer.allocate(INT_SIZE*freq);
-
-        try {
-            numOfBytesRead = fc.read(buffer);
-            if (numOfBytesRead == -1) return null;
-        } catch (IOException e) {
-            throw e;
-        }
+        buffer = ByteBuffer.allocate(INT_SIZE * freq);
+        numOfBytesRead = readHelper(fc, buffer);
+        if (numOfBytesRead == -1) { return null; }
         buffer.rewind();
 
         List<Integer> docIds = new ArrayList<>(freq);
-        for (int i=0; i<freq; ++i) {
+        for (int i = 0; i < freq; ++i) {
             int docId = buffer.getInt();
             docIds.add(docId);
         }
 
         String termStr = Index.getTermStr(termId);
-		PostingList postingList = new PostingList(termId, termStr, docIds);
+        PostingList postingList = new PostingList(termId, termStr, docIds);
 
-		return postingList;
-	}
-
-	@Override
-	public void writePosting(FileChannel fc, PostingList p) throws Throwable {
-		/*
-		 * The allocated space is for termID + freq + docIds in p
-		 */
-		ByteBuffer buffer = ByteBuffer.allocate(INT_SIZE * (p.getList().size() + 2));
-		buffer.putInt(p.getTermId()); // put termId
-		buffer.putInt(p.getList().size()); // put freq
-		for (int id : p.getList()) { // put docIds
-			buffer.putInt(id); 
-		}
-
-		/* Flip the buffer so that the position is set to zero.
-		 * This is the counterpart of buffer.rewind()
-		 */
-		buffer.flip();
-		/*
-		 * fc.write writes a sequence of bytes into fc from buffer.
-		 * File position is updated with the number of bytes actually 
-		 * written
-		 */
-		try {
-			fc.write(buffer);
-		} catch (IOException e) {
-			throw e;
-		}
-	}
+        return postingList;
+    }
 }
