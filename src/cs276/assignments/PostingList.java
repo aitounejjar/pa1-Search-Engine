@@ -8,7 +8,6 @@ import java.util.stream.IntStream;
 public class PostingList {
 
 	private int termId;
-	private String termStr;
 	private List<Integer> postings; // a list of docIDs (i.e. postings)
 
     //--------------------------------------------------------------------------------------------------------------
@@ -25,17 +24,10 @@ public class PostingList {
         this.postings = IntStream.of(list).boxed().collect(Collectors.toList());
     }
 
-	public PostingList(int termId, String termStr) {
+	public PostingList(int termId) {
 		this.termId = termId;
-		this.termStr = termStr;
 		this.postings = new ArrayList<>();
 	}
-
-    public PostingList(int termId, String termStr, List<Integer> list) {
-        this.termId = termId;
-        this.termStr = termStr;
-        this.postings = list;
-    }
 
     //--------------------------------------------------------------------------------------------------------------
     // getter(s) and setter(s)
@@ -49,17 +41,8 @@ public class PostingList {
 		return this.postings;
 	}
 
-	public void setTermStr(String termStr) {
-	    this.termStr = termStr;
-    }
-
     public int[] getListAsArray() {
 	    return this.postings.stream().mapToInt(i->i).toArray();
     }
 
-    //--------------------------------------------------------------------------------------------------------------
-
-	public String toString() {
-	    return "(" + termId + ", \"" + termStr + "\") -->" + postings.toString();
-    }
 }

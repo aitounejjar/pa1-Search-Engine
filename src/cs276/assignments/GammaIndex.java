@@ -202,12 +202,11 @@ public class GammaIndex extends AbstractIndex {
      * @return The next index position in outputUnaryCode immediately following the unary code for number
      */
     public static int unaryEncodeInteger(int number, BitSet outputUnaryCode, int startIndex) {
-        int nextIndex = startIndex;
         // TODO: Fill in your code here
 
         outputUnaryCode.set(startIndex, startIndex + number);
         //System.out.println("outputUnaryCode: " + createString(outputUnaryCode));
-        return nextIndex + number + 1;
+        return startIndex + number + 1;
     }
 
     /**

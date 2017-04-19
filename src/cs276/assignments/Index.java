@@ -25,12 +25,10 @@ public class Index {
     private static Map<Integer, Pair<Long, Integer>> postingDict = new TreeMap<>();
 
     // Doc name -> doc id dictionary
-    private static Map<String, Integer> docDict = new TreeMap<String, Integer>();
-    private static Map<Integer, String> docDict_reversed = new TreeMap<>();
+    private static Map<String, Integer> docDict = new TreeMap<>();
 
     // Term -> term id dictionary. This makes index construction more efficient. How ?
     private static Map<String, Integer> termDict = new TreeMap<>();
-    private static Map<Integer, String> termDict_reversed = new TreeMap<>();
 
     // Block queue
     private static LinkedList<File> blockQueue = new LinkedList<>();
@@ -150,7 +148,6 @@ public class Index {
                 ++totalFileCount;
                 String fileName = block.getName() + "/" + file.getName();
                 docDict.put(fileName, ++docIdCounter);
-                docDict_reversed.put(docIdCounter, fileName);
 
                 BufferedReader reader = new BufferedReader(new FileReader(file));
                 String line;
@@ -168,15 +165,14 @@ public class Index {
                         if (!termDict.containsKey(token)) {
                             // add the new term to dictionary
                             termDict.put(token, ++wordIdCounter);
-                            termDict_reversed.put(wordIdCounter, token);
                             // assign it an empty postings list
-                            inv_index.put(wordIdCounter, new PostingList(wordIdCounter, token));
+                            inv_index.put(wordIdCounter, new PostingList(wordIdCounter));
                             termId = wordIdCounter;
                         } else {
                             termId = termDict.get(token);
                             if (inv_index.get(termId) == null) {
                                 // this term already exists in the dictionary, but this is the first time it was discovered in this block
-                                inv_index.put(termId, new PostingList(termId, token));
+                                inv_index.put(termId, new PostingList(termId));
                             }
                         }
 
@@ -185,7 +181,7 @@ public class Index {
                             docs.add(docIdCounter);
                         }
 
-                        inv_index.put(termId, new PostingList(termId, token, docs));
+                        inv_index.put(termId, new PostingList(termId, docs));
 
                     }
                 }
@@ -278,20 +274,10 @@ public class Index {
                     int term1 = (p1==null) ? -1 : p1.getTermId();
                     int term2 = (p2==null) ? -1 : p2.getTermId();
 
-                    if (p1 != null) {
-                        p1.setTermStr(termDict_reversed.get(term1));
-                    }
-
-                    if (p2 != null) {
-                        p2.setTermStr(termDict_reversed.get(term2));
-                    }
-
                     // TBD - do the actual merge ...
                     if (term1 == term2) {
                         List<Integer> merged = IndexUtils.mergePostingLists(p1.getList(), p2.getList());
                         writePosting(mf.getChannel(), new PostingList(term1, merged));
-
-                        print_helper( new PostingList(term1, termDict_reversed.get(term1), merged).toString() );
 
                         // read next posting lists
                         p1 = index.readPosting(fc1);
@@ -353,10 +339,6 @@ public class Index {
             postWriter.write(termId + "\t" + postingDict.get(termId).getFirst() + "\t" + postingDict.get(termId).getSecond() + "\n");
         }
         postWriter.close();
-    }
-
-    public static String getTermStr(int termId) {
-        return termDict_reversed.get(termId);
     }
 
     //--------------------------------------------------------------------------------------------------------------

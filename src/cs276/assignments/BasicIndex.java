@@ -88,9 +88,6 @@ public class BasicIndex extends AbstractIndex {
             docIds.add(docId);
         }
 
-        String termStr = Index.getTermStr(termId);
-        PostingList postingList = new PostingList(termId, termStr, docIds);
-
-        return postingList;
+        return new PostingList(termId, docIds);
     }
 }

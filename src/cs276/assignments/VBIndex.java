@@ -183,9 +183,7 @@ public class VBIndex extends AbstractIndex {
 
     private void prependToArray(byte[] a, byte b) {
         // TODO: handle edge cases
-        for (int i=a.length-2; i>=0; --i) {
-            a[i+1] = a[i];
-        }
+        System.arraycopy(a, 0, a, 1, a.length - 2 + 1);
         a[0] = b;
     }
 

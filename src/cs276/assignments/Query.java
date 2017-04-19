@@ -8,7 +8,6 @@ import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -20,18 +19,16 @@ import java.util.TreeMap;
 public class Query {
 
 	// Term id -> position in index file
-	private static Map<Integer, Long> posDict = new TreeMap<Integer, Long>();
+	private static Map<Integer, Long> posDict = new TreeMap<>();
 
 	// Term id -> document frequency
-	private static Map<Integer, Integer> freqDict = new TreeMap<Integer, Integer>();
+	private static Map<Integer, Integer> freqDict = new TreeMap<>();
 
 	// Doc id -> doc name dictionary
-	private static Map<Integer, String> docDict = new TreeMap<Integer, String>();
-	private static Map<String, Integer> docDict_reversed = new TreeMap<>();
+	private static Map<Integer, String> docDict = new TreeMap<>();
 
 	// Term -> term id dictionary
-	private static Map<String, Integer> termDict = new TreeMap<String, Integer>();
-	private static Map<Integer, String> termDict_reversed = new TreeMap<>();
+	private static Map<String, Integer> termDict = new TreeMap<>();
 
 	// Index
 	private static BaseIndex index = null;
@@ -53,7 +50,6 @@ public class Query {
         PostingList result = null;
         try {
             result = index.readPosting(fc);
-            result.setTermStr(termDict_reversed.get(termId));
         } catch (Throwable throwable) {
             throwable.printStackTrace();
         }
@@ -98,7 +94,6 @@ public class Query {
 			String termStr = tokens[0];
 			int termId = Integer.parseInt(tokens[1]);
 			termDict.put(termStr, termId);
-			termDict_reversed.put(termId, termStr);
 		}
 		termReader.close();
 
@@ -109,7 +104,6 @@ public class Query {
 			int docId = Integer.parseInt(tokens[1]);
 			String docName = tokens[0];
 			docDict.put(docId, docName);
-			docDict_reversed.put(docName, docId);
 		}
 		docReader.close();
 
@@ -176,7 +170,7 @@ public class Query {
             postings.add(p);
         }
 
-        Collections.sort(postings, new Comparator<PostingList>() {
+        postings.sort(new Comparator<PostingList>() {
             @Override
             public int compare(PostingList p1, PostingList p2) {
                 Integer freq1 = p1.getList().size();
@@ -210,7 +204,7 @@ public class Query {
         if (!search_aborted) {
             List<Integer> docIds = queue.getFirst();
             // sorting the document ids in lexicographical order
-            Collections.sort(docIds, new Comparator<Integer>() {
+            docIds.sort(new Comparator<Integer>() {
                 @Override
                 public int compare(Integer docId1, Integer docId2) {
                     String docName1 = docDict.get(docId1);
